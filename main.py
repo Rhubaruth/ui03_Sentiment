@@ -1,22 +1,38 @@
 import re
-# import urllib.request
-# import requests
+import urllib.request
+
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+from nltk import tokenize
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from bs4 import BeautifulSoup
 
-if __name__ == '__main__':
-    URL_CELESTE = """https://steamcommunity.com/app/
-        504230/reviews/
-        ?filterLanguage=english"""
-    URL_PALWORDLS = """https://steamcommunity.com/app/
-        1623730/reviews/
-        ?browsefilter=toprated&snr=1_5_100010_&filterLanguage=english"""
+import numpy as np
+import matplotlib.pyplot as plt
 
-    reviews_all = []
+URLPART_ENGLISH_SEARCH = """?filterLanguage=english"""
+URL_CELESTE = """https://steamcommunity.com/app/504230/reviews/"""
+URL_PALWORDLS = """https://steamcommunity.com/app/1623730/reviews/"""
+URL_RIMWORLD = """https://steamcommunity.com/app/294100/reviews/"""
+
+
+SCROLL_LIMIT = 30
+
+
+def load_quick(url) -> str:
+    """ Load steam review page without scrolling """
+
+    soup = None
+    with urllib.request.urlopen(url) as response:
+        soup = BeautifulSoup(response, 'html5lib')
+    return soup
+
+def load_full(url) -> str:
+    """ Load steam full review page by scrolling with selenium """
 
     options = webdriver.ChromeOptions()
     options.add_argument('--ignore-cerificate-errors')
@@ -25,12 +41,12 @@ if __name__ == '__main__':
 
     driver = webdriver.Chrome("./chromedriver-win64/chromedriver.exe",
                               options=options)
-    # driver.get(URL_CELESTE)
-    driver.get(URL_CELESTE)
+
+    driver.get(url)
     WebDriverWait(driver, 100).until(EC.element_to_be_clickable((By.ID, 'page1')))
 
     actions = ActionChains(driver)
-    for i in range(1, 30):
+    for _ in range(1, SCROLL_LIMIT):
         actions.scroll_by_amount(delta_x=0, delta_y=10_000).perform()
         element_loading = (By.ID, 'action_wait')
         WebDriverWait(driver, 15).until_not(EC.element_to_be_clickable(element_loading))
@@ -39,24 +55,110 @@ if __name__ == '__main__':
     page_source = driver.page_source
 
     soup = BeautifulSoup(page_source, 'lxml')
-    reviews_all = soup.find_all('div', re.compile('apphub_CardTextContent'))
+    return soup
+
+def parse_review(review):
+    """ Parse UserReviewCardContent """
+    found_helpful = review.find('div', 'found_helpful')
+    found_helpful.extract()
+
+    found_early_access = review.find('div', 'early_access_review')
+    if found_early_access:
+        found_early_access.extract()
+
+    review = review.get_text("|", strip=True).split('|')
+    hours = review[1].split(' ')[0].replace(',', '')
+    review_dict = {
+        'verdict': review[0],
+        'hours': float(hours),
+        'date': review[2],
+        'text': ' '.join(review[3:]),
+        }
+
+    return review_dict
+
+
+def main():
+    """ main function """
+
+    soup = load_quick(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
+    # soup = load_full(URL_CELESTE + URLPART_ENGLISH_SEARCH)
+
+    user_verdicts = {
+        'Recommended': 0,
+        'Not Recommended': 0,
+        'Not Sure': 0,
+
+    }
+
+    ai_verdicts = {
+        'Recommended': 0,
+        'Not Recommended': 0,
+        'Not Sure': 0,
+
+    }
+
+
+    reviews_all = soup.find_all('div', re.compile('apphub_UserReviewCardContent'))
     for review in reviews_all:
-        print(review.get_text().replace('\t', ''))
+        data = parse_review(review)
+
+        review_text = data['text']
+
+        user_verdicts[data['verdict']] += 1
+
+        sentences = tokenize.sent_tokenize(review_text)
+
+        total_review_compound: float = 0.0
+        for s in sentences:
+            # print(s)
+            sid = SentimentIntensityAnalyzer()
+            ss = sid.polarity_scores(s)
+            total_review_compound += ss['compound']
+        if len(sentences) == 0:
+            ai_verdicts['Not Sure'] += 1
+            # print(data)
+            # print()
+            continue
+        total_review_compound /= len(sentences)
+        if total_review_compound > 0.1:
+            ai_verdicts['Recommended'] += 1
+        elif total_review_compound < -0.1:
+            ai_verdicts['Not Recommended'] += 1
+        else:
+            ai_verdicts['Not Sure'] += 1
+
+        # print(f'{total_review_compound / len(sentences)} {data["verdict"]}')
+        # print()
+    print(user_verdicts)
+    print(ai_verdicts)
 
     # print(*reviews_all, sep='\n')
     print(f'\n Num of Reviews Souped: {len(reviews_all)}')
 
 
-    # response = requests.get(URL, headers=headers, params=payload, timeout=10)
-    # soup = BeautifulSoup(response.text, 'lxml')
+    n_groups = 3
+    fig, ax = plt.subplots()
+    index = np.arange(n_groups)
+
+    print(list(user_verdicts.values()))
+
+    plt.bar(index, list(user_verdicts.values()), 0.3,
+         alpha=0.8,
+         color='b',
+         label='user')
+    plt.bar(index + 0.3, list(ai_verdicts.values()), 0.3,
+         alpha=0.8,
+         color='g',
+         label='ai')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
-    # with urllib.request.urlopen(URL, ) as response:
-    #     soup = BeautifulSoup(response, 'html5lib')
-    #     # print(soup.prettify())
-    #
-    #     reviews = soup.find_all('div', re.compile('apphub_CardTextContent'))
-    #     # for link in reviews:
-    #     #     print(link.get_text())
-    #
-    #     print(f'\n Num of Reviews Souped: {len(reviews)}')
+if __name__ == '__main__':
+    # import nltk
+    # nltk.download('subjectivity')
+    # nltk.download('vader_lexicon')
+    # nltk.download('punkt')
+    main()
