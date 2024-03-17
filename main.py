@@ -7,7 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from nltk import tokenize
+from nltk import tokenize, word_tokenize, ngrams, FreqDist
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from bs4 import BeautifulSoup
 
@@ -67,6 +67,10 @@ def parse_review(review):
         found_early_access.extract()
 
     review = review.get_text("|", strip=True).split('|')
+    review[0] = review[0].replace(
+            'Doporučuji', 'Recommended').replace(
+            'Nedoporučuji', 'Not Recommended')
+
     hours = review[1].split(' ')[0].replace(',', '')
     review_dict = {
         'verdict': review[0],
@@ -81,7 +85,7 @@ def parse_review(review):
 def main():
     """ main function """
 
-    soup = load_quick(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
+    soup = load_full(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
     # soup = load_full(URL_CELESTE + URLPART_ENGLISH_SEARCH)
 
     user_verdicts = {
@@ -96,9 +100,9 @@ def main():
         'Not Recommended': 0,
         'Not Sure': 0,
 
-    }
+    }   
 
-
+    words_all = []
     reviews_all = soup.find_all('div', re.compile('apphub_UserReviewCardContent'))
     for review in reviews_all:
         data = parse_review(review)
@@ -107,6 +111,7 @@ def main():
 
         user_verdicts[data['verdict']] += 1
 
+        words_all.extend(word_tokenize(review_text))
         sentences = tokenize.sent_tokenize(review_text)
 
         total_review_compound: float = 0.0
@@ -130,15 +135,18 @@ def main():
 
         # print(f'{total_review_compound / len(sentences)} {data["verdict"]}')
         # print()
-    print(user_verdicts)
-    print(ai_verdicts)
 
-    # print(*reviews_all, sep='\n')
+
+    # print(user_verdicts)
+    # print(ai_verdicts)
+    
+    # # print(*reviews_all, sep='\n')
     print(f'\n Num of Reviews Souped: {len(reviews_all)}')
 
 
+    # Reviews
     n_groups = 3
-    fig, ax = plt.subplots()
+    plt.subplots()
     index = np.arange(n_groups)
 
     print(list(user_verdicts.values()))
@@ -154,6 +162,29 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+
+    # Word Frequency
+    all_counts = FreqDist(words_all)
+    num_words = 10
+
+    print(all_counts.most_common(num_words))
+
+    fig, ax = plt.subplots()
+
+    x_labels = []
+    for idx, val in enumerate(all_counts.most_common(num_words)):
+        word, count = val
+        plt.barh(idx, count, 0.3,
+             alpha=0.8,
+             color='b')
+        x_labels.append(word)
+
+    ax.invert_yaxis()
+    plt.yticks(range(num_words), x_labels)
+    plt.tight_layout()
+    plt.show()
+
 
 
 if __name__ == '__main__':
