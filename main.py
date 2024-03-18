@@ -9,7 +9,7 @@ from load_full import load_full
 from parse_review import parse_review
 from get_frequency import get_word_frequency
 
-from display_graphs import graph_data, display_vertical
+from display_graphs import graph_data, display_vertical, display_horizontal
 
 
 URLPART_ENGLISH_SEARCH = """?filterLanguage=english"""
@@ -18,48 +18,16 @@ URL_PALWORDLS = """https://steamcommunity.com/app/1623730/reviews/"""
 URL_RIMWORLD = """https://steamcommunity.com/app/294100/reviews/"""
 URL_BALATRO = """https://steamcommunity.com/app/2379780/reviews/"""
 
-
-
-# nejpoužívanější slova v angličtině pro vyfiltrování častých slov specifických pro danou hru
-# https://github.com/first20hours/google-10000-english/blob/master/google-10000-english.txt
-MOST_USED_WORDS_ENGLISH = [
-    'the', 'of', 'and', 'to', 'a',
-    'in', 'for', 'is', 'on', 'that',
-    'by', 'this', 'with', 'i', 'you',
-    'it', 'not', 'or', 'be', 'are',
-    'from', 'at', 'as', 'your', 'all',
-    'have', 'new', 'more', 'an', 'was',
-    'we', 'will', 'can', 'us', 'about',
-    'if', 'my', 'has', 'but', 'our',
-    'one', 'other', 'do', 'no', 'they',
-    'he', 'up', 'may', 'what', 'which',
-    'their', 'out', 'any', 'there', 'only',
-    'so', 'his', 'when', 'here', 'who',
-    'also', 'now', 'c', 'e', 'am',
-    'been', 'would', 'how', 'were', 'me',
-    's', 'some', 'these', 'its', 'like',
-    'x', 'than', 'back', 'had', 'just',
-    'over', 'into', 'two', 'n', 're',
-    'go', 'b', 'last', 'most', 'buy',
-    'make', 'them', 'should', 'her', 't',
-    'add', 'such', 'please', 'after', 'best',
-    'then', 'well', 'd', 'where', 'info',
-    'rights', 'through', 'm', 'each', 'she',
-    'very', 'r', 'need', 'many', 'de',
-    'does', 'under', 'full',
-]
-
-
 def main():
     """ main function """
 
     # soup = load_quick(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
     # soup = load_quick(URL_PALWORDLS + URLPART_ENGLISH_SEARCH)
-    soup = load_quick(URL_CELESTE + URLPART_ENGLISH_SEARCH)
+    # soup = load_quick(URL_CELESTE + URLPART_ENGLISH_SEARCH)
 
     # soup = load_full(URL_BALATRO + URLPART_ENGLISH_SEARCH)
     # soup = load_full(URL_PALWORDLS + URLPART_ENGLISH_SEARCH)
-    # soup = load_full(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
+    soup = load_full(URL_RIMWORLD + URLPART_ENGLISH_SEARCH)
 
     user_verdicts = {
         'Recommended': 0,
@@ -157,34 +125,16 @@ def main():
     # Displey most common words and their count
     ax = plt.subplot(1, 2, 1)
     ax.set_title('Word frequency')
-    display_vertical(plt, [x[0] for x in frequency_all],
-                     graph_data([x[1] for x in frequency_all]), '',
-                     graph_data([x[1] for x in frequency_all]), '')
+    display_horizontal(plt, graph_data(frequency_all, ''))
 
     ax = plt.subplot(1, 2, 2)
     ax.set_title('Word frequency (unique words/user)')
-    word_labels: list[str] = []
-    for idx, val in enumerate(frequency_unique[::-1]):
-        word, count = val
-        plt.barh(idx, count, 0.3,
-            alpha=0.8,
-            color='b',
-            )
-        plt.barh(idx, words_all.count(word), 0.3,
-            alpha=0.2,
-            color='b',
-            )
-        word_labels.append(word)
-    # just to add labes to legend
-    plt.barh(0, 0, 0,
-            alpha=0.2, color='b',
-            label='From all words')
-    plt.barh(0, 0, 0,
-            alpha=0.8, color='b',
-            label='From unique per user')
+    display_horizontal(plt, graph_data(frequency_unique, 'per user'))
+    display_horizontal(plt, graph_data(
+            [(word[0], words_all.count(word[0])) for word in frequency_unique],
+            'all words', 'b', 0.2)
+        )
     plt.legend()
-    plt.yticks(range(num_words), word_labels)
-    plt.tight_layout()
 
 
     # Displey longest words and their count

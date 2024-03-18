@@ -46,14 +46,20 @@ def display_vertical(plot, verdict_labels,
     # plt.legend()
     # plt.tight_layout()
 
-# def display_horizontal(plot, horizontal_labels):
-#     n_groups = len(horizontal_labels)
-#     word_labels: list[str] = []
-#     for idx, val in enumerate(all_counts.most_common(num_words)[::-1]):
-#         word, count = val
-#         plot.barh(idx, count, BAR_WIDTH,
-#              alpha=0.8,
-#              color='b')
-#         word_labels.append(word)
-#     plot.yticks(range(n_groups), word_labels)
-#     plot.tight_layout()
+def display_horizontal(plot, data: graph_data):
+    """ Creates a horizontal bargraph with labels """
+    print(data.values)
+    horizontal_labels = []
+    values = []
+    for x in data.values[::-1]:
+        horizontal_labels.append(x[0])
+        values.append(x[1])
+    n_groups = len(horizontal_labels)
+    index = np.arange(n_groups)
+
+    plot.barh(index, values, BAR_WIDTH,
+         alpha=data.alpha,
+         color=data.color,
+         label=data.label)
+    plot.yticks(range(n_groups), horizontal_labels)
+    plot.tight_layout()
